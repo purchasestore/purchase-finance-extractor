@@ -36,14 +36,21 @@ export function DataPreview({ data }: DataPreviewProps) {
   ]
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border animate-in fade-in-50 duration-700">
       <ScrollArea className="h-[500px]">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                {sortedKeys.map((key) => (
-                  <TableHead key={key} className="whitespace-nowrap font-semibold">
+                {sortedKeys.map((key, index) => (
+                  <TableHead
+                    key={key}
+                    className="whitespace-nowrap font-semibold"
+                    style={{
+                      animationDelay: `${index * 50}ms`,
+                      animation: "fadeIn 0.5s ease forwards",
+                    }}
+                  >
                     {key}
                   </TableHead>
                 ))}
@@ -51,7 +58,14 @@ export function DataPreview({ data }: DataPreviewProps) {
             </TableHeader>
             <TableBody>
               {data.map((row, rowIndex) => (
-                <TableRow key={rowIndex}>
+                <TableRow
+                  key={rowIndex}
+                  style={{
+                    animationDelay: `${rowIndex * 100}ms`,
+                    animation: "fadeIn 0.5s ease forwards",
+                    opacity: 0,
+                  }}
+                >
                   {sortedKeys.map((key) => (
                     <TableCell key={`${rowIndex}-${key}`} className="whitespace-nowrap">
                       {row[key] !== undefined ? String(row[key]) : ""}
@@ -63,6 +77,12 @@ export function DataPreview({ data }: DataPreviewProps) {
           </Table>
         </div>
       </ScrollArea>
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `}</style>
     </div>
   )
 }
