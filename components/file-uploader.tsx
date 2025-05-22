@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Upload, FileSpreadsheet, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -16,9 +16,15 @@ export function FileUploader() {
   const [error, setError] = useState<string | null>(null)
   const [previewData, setPreviewData] = useState<any[] | null>(null)
   const [processedFileUrl, setProcessedFileUrl] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
+    processSelectedFile(selectedFile)
+  }
+
+  const processSelectedFile = (selectedFile: File | undefined) => {
     setError(null)
     setPreviewData(null)
     setProcessedFileUrl(null)
@@ -33,6 +39,27 @@ export function FileUploader() {
     }
 
     setFile(selectedFile)
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const droppedFile = e.dataTransfer.files?.[0]
+    processSelectedFile(droppedFile)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,6 +93,12 @@ export function FileUploader() {
     }
   }
 
+  const openFileSelector = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click()
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -78,20 +111,36 @@ export function FileUploader() {
               >
                 Selecione a planilha de pedidos SHEIN
               </label>
-              <div className="flex items-center justify-center w-full">
-                <label
-                  htmlFor="file-upload"
-                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted/50 hover:bg-muted"
+              <div
+                className="flex items-center justify-center w-full"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <div
+                  onClick={openFileSelector}
+                  className={`flex flex-col items-center justify-center w-full h-32 border-2 ${
+                    isDragging ? "border-primary" : "border-dashed"
+                  } rounded-lg cursor-pointer ${
+                    isDragging ? "bg-primary/10" : "bg-muted/50 hover:bg-muted"
+                  } transition-colors duration-200`}
                 >
                   <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
+                    <Upload className={`w-8 h-8 mb-2 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
                     <p className="mb-2 text-sm text-muted-foreground">
                       <span className="font-semibold">Clique para fazer upload</span> ou arraste e solte
                     </p>
                     <p className="text-xs text-muted-foreground">Apenas arquivos Excel (.xlsx)</p>
                   </div>
-                  <input id="file-upload" type="file" accept=".xlsx" className="hidden" onChange={handleFileChange} />
-                </label>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    accept=".xlsx"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    ref={fileInputRef}
+                  />
+                </div>
               </div>
               {file && (
                 <div className="flex items-center gap-2 text-sm mt-2">
