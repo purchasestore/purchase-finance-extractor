@@ -140,7 +140,6 @@ function levenshteinDistance(str1: string, str2: string): number {
 
 export async function processOrderData(
   formData: FormData,
-  setStage: (stage: string) => void,
 ): Promise<{
   data?: ProcessedOrder[]
   error?: string
@@ -162,7 +161,6 @@ export async function processOrderData(
     }
 
     // Read order file
-    setStage("Lendo arquivo de pedidos...")
     const orderBuffer = await orderFile.arrayBuffer()
     const orderWorkbook = XLSX.read(orderBuffer, {
       type: "buffer",
@@ -235,7 +233,6 @@ export async function processOrderData(
 
     // Read cost file if provided (this will override fixed data)
     if (costFile) {
-      setStage("Lendo arquivo de custos...")
       try {
         const costBuffer = await costFile.arrayBuffer()
         const costWorkbook = XLSX.read(costBuffer, { type: "buffer", cellText: false })
@@ -282,7 +279,7 @@ export async function processOrderData(
       } catch (error) {
         console.error("Error reading cost file:", error)
         // Continue with fixed data
-        setStage("Erro ao ler arquivo de custos, usando dados fixos...")
+        costDataSource = "Dados fixos internos"
       }
     }
 
@@ -290,7 +287,6 @@ export async function processOrderData(
     console.log(`Total cost entries: ${costMap.size / 2}`)
 
     // Process order data
-    setStage("Aplicando regras de negócio e fazendo correspondência de custos...")
     const processedData: ProcessedOrder[] = []
     const missingCosts: string[] = []
 
@@ -424,8 +420,6 @@ export async function processOrderData(
         // Continue processing other rows
       }
     }
-
-    setStage("Finalizando processamento...")
 
     console.log("Cost matching statistics:", costMatchingStats)
     console.log("Sample processed data:", processedData.slice(0, 2))

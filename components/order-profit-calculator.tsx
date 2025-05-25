@@ -68,7 +68,7 @@ export function OrderProfitCalculator() {
         formData.append("costFile", costFile)
       }
 
-      const result = await processOrderData(formData, setProcessingStage)
+      const result = await processOrderData(formData)
 
       if (result.error) {
         setError(result.error)
