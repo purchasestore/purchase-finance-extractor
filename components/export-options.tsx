@@ -120,7 +120,7 @@ export function ExportOptions({ data }: ExportOptionsProps) {
 
   if (data.length === 0) {
     return (
-      <Button variant="outline" size="sm" disabled>
+      <Button variant="outline" size="sm" disabled className="border-gray-200 text-gray-400">
         <Download className="h-4 w-4 mr-2" />
         Sem dados para exportar
       </Button>
@@ -128,67 +128,135 @@ export function ExportOptions({ data }: ExportOptionsProps) {
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-3">
       {/* Quick Excel Export Button */}
-      <Button variant="default" size="sm" onClick={handleExportExcelSimple} disabled={isExporting}>
-        <FileSpreadsheet className="h-4 w-4 mr-2" />
-        {isExporting ? "Exportando..." : "Excel"}
+      <Button 
+        variant="default" 
+        size="sm" 
+        onClick={handleExportExcelSimple} 
+        disabled={isExporting}
+        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all duration-300 font-medium"
+      >
+        {isExporting ? (
+          <>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+            Exportando...
+          </>
+        ) : (
+          <>
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            📊 Excel
+          </>
+        )}
       </Button>
 
       {/* Quick CSV Export Button */}
-      <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={isExporting}>
-        <FileText className="h-4 w-4 mr-2" />
-        {isExporting ? "Exportando..." : "CSV"}
+      <Button 
+        variant="outline" 
+        size="sm" 
+        onClick={handleExportCSV} 
+        disabled={isExporting}
+        className="border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 font-medium"
+      >
+        {isExporting ? (
+          <>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+            Exportando...
+          </>
+        ) : (
+          <>
+            <FileText className="h-4 w-4 mr-2" />
+            📋 CSV
+          </>
+        )}
       </Button>
 
       {/* Dropdown with all options */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" disabled={isExporting}>
-            <Download className="h-4 w-4 mr-2" />
-            {isExporting ? "Exportando..." : "Mais opções"}
-            <ChevronDown className="h-4 w-4 ml-2" />
+          <Button 
+            variant="outline" 
+            size="sm" 
+            disabled={isExporting}
+            className="border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300 transition-all duration-300 font-medium"
+          >
+            {isExporting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
+                Exportando...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-2" />
+                ⚙️ Mais opções
+                <ChevronDown className="h-4 w-4 ml-2" />
+              </>
+            )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent align="end" className="w-64 bg-white/95 backdrop-blur-sm border-0 shadow-xl rounded-xl p-2">
           {/* Excel Options */}
-          <div className="px-2 py-1.5 text-sm font-semibold text-gray-700">Excel</div>
-          <DropdownMenuItem onClick={handleExportExcelSimple}>
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
+          <div className="px-3 py-2 text-sm font-semibold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent border-b border-gray-100 mb-2">
+            📊 Excel
+          </div>
+          <DropdownMenuItem 
+            onClick={handleExportExcelSimple}
+            className="rounded-lg hover:bg-green-50 hover:text-green-700 transition-colors duration-200 font-medium"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-3 text-green-600" />
             Excel Simples (.xlsx)
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleExportExcelAdvanced}>
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
+          <DropdownMenuItem 
+            onClick={handleExportExcelAdvanced}
+            className="rounded-lg hover:bg-green-50 hover:text-green-700 transition-colors duration-200 font-medium"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-3 text-green-600" />
             Excel Formatado (.xlsx)
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleExportExcelMultiSheet}>
-            <Layers className="h-4 w-4 mr-2" />
+          <DropdownMenuItem 
+            onClick={handleExportExcelMultiSheet}
+            className="rounded-lg hover:bg-green-50 hover:text-green-700 transition-colors duration-200 font-medium"
+          >
+            <Layers className="h-4 w-4 mr-3 text-green-600" />
             Excel Multi-Planilhas (.xlsx)
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleExportExcelHTML}>
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
+          <DropdownMenuItem 
+            onClick={handleExportExcelHTML}
+            className="rounded-lg hover:bg-green-50 hover:text-green-700 transition-colors duration-200 font-medium"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-3 text-green-600" />
             Excel HTML (.xls)
           </DropdownMenuItem>
 
-          <DropdownMenuSeparator />
+          <DropdownMenuSeparator className="my-3" />
 
           {/* Other Formats */}
-          <div className="px-2 py-1.5 text-sm font-semibold text-gray-700">Outros Formatos</div>
-          <DropdownMenuItem onClick={handleExportCSV}>
-            <FileText className="h-4 w-4 mr-2" />
+          <div className="px-3 py-2 text-sm font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent border-b border-gray-100 mb-2">
+            📄 Outros Formatos
+          </div>
+          <DropdownMenuItem 
+            onClick={handleExportCSV}
+            className="rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 font-medium"
+          >
+            <FileText className="h-4 w-4 mr-3 text-blue-600" />
             CSV (.csv)
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleExportText}>
-            <File className="h-4 w-4 mr-2" />
+          <DropdownMenuItem 
+            onClick={handleExportText}
+            className="rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 font-medium"
+          >
+            <File className="h-4 w-4 mr-3 text-blue-600" />
             Texto (.txt)
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       {/* Info about browser compatibility */}
-      <div className="text-xs text-gray-500 flex items-center ml-2">
-        <AlertTriangle className="h-3 w-3 mr-1" />
-        <span className="hidden md:inline">Compatível com todos os navegadores</span>
+      <div className="flex items-center ml-2 px-3 py-1 bg-gray-100/60 backdrop-blur-sm rounded-lg border border-gray-200/50">
+        <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+        <span className="text-xs font-medium text-gray-600 hidden md:inline">
+          ✅ Compatível com todos os navegadores
+        </span>
       </div>
     </div>
   )
