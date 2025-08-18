@@ -10,7 +10,7 @@ import { CostReferenceTab } from "@/components/cost-reference-tab"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle, CheckCircle, Info } from "lucide-react"
-import { processOrderData } from "@/app/actions"
+import { processOrderData, processZipFiles } from "@/app/actions"
 
 export interface ProcessedOrder {
   "Número do produto": string
@@ -40,6 +40,7 @@ interface CostMatchingStats {
 export function OrderProfitCalculator() {
   const [orderFile, setOrderFile] = useState<File | null>(null)
   const [costFile, setCostFile] = useState<File | null>(null)
+  const [zipFile, setZipFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [processedData, setProcessedData] = useState<ProcessedOrder[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -86,9 +87,46 @@ export function OrderProfitCalculator() {
     }
   }
 
+  const handleProcessZip = async () => {
+    if (!zipFile) {
+      setError("Por favor, selecione um arquivo ZIP")
+      return
+    }
+
+    setIsProcessing(true)
+    setError(null)
+    setProcessedData(null)
+    setMissingCosts([])
+    setCostMatchingStats(null)
+
+    try {
+      setProcessingStage("Processando arquivo ZIP...")
+
+      const formData = new FormData()
+      formData.append("zipFile", zipFile)
+
+      const result = await processZipFiles(formData)
+
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setProcessedData(result.data || [])
+        setMissingCosts(result.missingCosts || [])
+        setCostMatchingStats(result.costMatchingStats || null)
+      }
+    } catch (err) {
+      setError("Erro inesperado durante o processamento do ZIP")
+      console.error(err)
+    } finally {
+      setIsProcessing(false)
+      setProcessingStage("")
+    }
+  }
+
   const handleReset = () => {
     setOrderFile(null)
     setCostFile(null)
+    setZipFile(null)
     setProcessedData(null)
     setError(null)
     setMissingCosts([])
@@ -114,9 +152,12 @@ export function OrderProfitCalculator() {
         <FileUploadZone
           orderFile={orderFile}
           costFile={costFile}
+          zipFile={zipFile}
           onOrderFileChange={setOrderFile}
           onCostFileChange={setCostFile}
+          onZipFileChange={setZipFile}
           onProcess={handleProcess}
+          onProcessZip={handleProcessZip}
           onReset={handleReset}
           isProcessing={isProcessing}
         />

@@ -1,6 +1,7 @@
 "use server"
 
 import * as XLSX from "xlsx"
+import JSZip from "jszip"
 import type { ProcessedOrder } from "@/components/order-profit-calculator"
 import { parseBrazilianCurrency } from "@/lib/currency-utils"
 
@@ -465,5 +466,261 @@ export async function processOrderData(
   } catch (error) {
     console.error("Error in processOrderData:", error)
     return { error: "Erro inesperado durante o processamento dos dados" }
+  }
+}
+
+export async function processZipFiles(
+  formData: FormData,
+): Promise<{
+  data?: ProcessedOrder[]
+  error?: string
+  missingCosts?: string[]
+  costMatchingStats?: {
+    totalSKUs: number
+    exactMatches: number
+    partialMatches: number
+    fuzzyMatches: number
+    noMatches: number
+  }
+}> {
+  try {
+    const zipFile = formData.get("zipFile") as File
+
+    if (!zipFile) {
+      return { error: "Arquivo ZIP é obrigatório" }
+    }
+
+    console.log("Processing ZIP file:", zipFile.name)
+    
+    // Read ZIP file
+    const zipBuffer = await zipFile.arrayBuffer()
+    const zip = new JSZip()
+    await zip.loadAsync(zipBuffer)
+    
+    // Get all Excel files from ZIP
+    const excelFiles = Object.keys(zip.files).filter(
+      fileName => fileName.toLowerCase().endsWith('.xlsx') || fileName.toLowerCase().endsWith('.xls')
+    )
+    
+    if (excelFiles.length === 0) {
+      return { error: "Nenhum arquivo Excel encontrado no ZIP" }
+    }
+    
+    console.log(`Found ${excelFiles.length} Excel files in ZIP:`, excelFiles)
+    
+    // Build cost map from fixed data
+    const costMap = new Map<string, number>()
+    FIXED_COST_DATA.forEach((row) => {
+      if (row.SKU && row["Custo Unitário"]) {
+        const parsedCost =
+          typeof row["Custo Unitário"] === "number"
+            ? row["Custo Unitário"]
+            : parseBrazilianCurrency(row["Custo Unitário"])
+        if (parsedCost > 0) {
+          costMap.set(row.SKU.trim(), parsedCost)
+          costMap.set(normalizeSKU(row.SKU), parsedCost)
+        }
+      }
+    })
+    
+    // Column mapping for new SHEIN format
+    const columnMapping = {
+      sku: "Número do documento (Pedido#/Ticket#/Invoice#/Guia...etc)",
+      preco: "Preço total de produto",
+      cupom: "Valor do cupom",
+      comissao: "Comissão",
+      receita: "Valor a receber",
+      quantidade: "Quantidade de produto",
+      tipoReceita: "Tipo de receita e despesa",
+      tipoFatura: "Tipo de fatura"
+    }
+    
+    // Process all Excel files
+    let allProcessedData: ProcessedOrder[] = []
+    let allMissingCosts: string[] = []
+    let allCostMatchingStats = {
+      totalSKUs: 0,
+      exactMatches: 0,
+      partialMatches: 0,
+      fuzzyMatches: 0,
+      noMatches: 0,
+    }
+    
+    for (const fileName of excelFiles) {
+      try {
+        console.log(`Processing file: ${fileName}`)
+        
+        // Get file content from ZIP
+        const file = zip.file(fileName)
+        if (!file) {
+          console.warn(`Could not read file: ${fileName}`)
+          continue
+        }
+        
+        // Convert to buffer
+        const fileBuffer = await file.async('arraybuffer')
+        
+        // Read Excel file
+        const workbook = XLSX.read(fileBuffer, {
+          type: "buffer",
+          cellText: false,
+          cellDates: true,
+        })
+        
+        // Get first sheet
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        
+        if (!worksheet) {
+          console.warn(`No data found in sheet: ${sheetName}`)
+          continue
+        }
+        
+        // Convert to JSON
+        const data = XLSX.utils.sheet_to_json(worksheet, {
+          range: 1,
+          raw: false,
+          defval: "",
+        }) as any[]
+        
+        if (!data || data.length === 0) {
+          console.warn(`No data in file: ${fileName}`)
+          continue
+        }
+        
+        // Validate required columns
+        const requiredColumns = [
+          "Número do documento (Pedido#/Ticket#/Invoice#/Guia...etc)",
+          "Preço total de produto",
+          "Valor do cupom",
+          "Comissão",
+          "Valor a receber",
+          "Quantidade de produto",
+          "Tipo de receita e despesa",
+          "Tipo de fatura"
+        ]
+        
+        const firstRow = data[0]
+        const availableColumns = Object.keys(firstRow)
+        const missingColumns = requiredColumns.filter((col) => !(col in firstRow))
+        
+        if (missingColumns.length > 0) {
+          console.warn(`Missing columns in ${fileName}:`, missingColumns)
+          continue
+        }
+        
+        // Process data from this file
+        for (let i = 0; i < data.length; i++) {
+          const row = data[i]
+          
+          try {
+            // Only process revenue rows
+            const tipoReceita = String(row[columnMapping.tipoReceita] || "").trim()
+            const tipoFatura = String(row[columnMapping.tipoFatura] || "").trim()
+            
+            if (tipoReceita !== "Receita" || !tipoFatura.includes("pedido")) {
+              continue
+            }
+            
+            const sku = String(row[columnMapping.sku] || "").trim()
+            allCostMatchingStats.totalSKUs++
+            
+            // Parse values
+            const precoProtudo = parseBrazilianCurrency(row[columnMapping.preco])
+            const valorCupom = parseBrazilianCurrency(row[columnMapping.cupom])
+            const comissao = parseBrazilianCurrency(row[columnMapping.comissao])
+            const receitaEstimada = parseBrazilianCurrency(row[columnMapping.receita])
+            const quantidade = Number(row[columnMapping.quantidade]) || 1
+            
+            // Apply business rules
+            const pecas = quantidade
+            const frete = 4
+            const aReceberFinal = receitaEstimada - comissao
+            
+            // Get cost using improved matching
+            let custo: number | string = "N/A - Sem dados de custo"
+            let margemContribuicao: number | string = "N/A"
+            let lucroBruto: number | string = "N/A"
+            
+            if (sku) {
+              const foundCost = findBestCostMatch(sku, costMap)
+              
+              if (foundCost !== null) {
+                custo = foundCost
+                margemContribuicao = aReceberFinal - custo
+                lucroBruto = margemContribuicao / pecas
+                
+                // Determine match type for statistics
+                if (costMap.has(sku)) {
+                  allCostMatchingStats.exactMatches++
+                } else if (costMap.has(normalizeSKU(sku))) {
+                  allCostMatchingStats.exactMatches++
+                } else {
+                  // Check if it was a partial or fuzzy match
+                  const normalizedSKU = normalizeSKU(sku)
+                  let isPartialMatch = false
+                  
+                  for (const costSKU of Array.from(costMap.keys())) {
+                    if (normalizedSKU.includes(normalizeSKU(costSKU)) || normalizeSKU(costSKU).includes(normalizedSKU)) {
+                      isPartialMatch = true
+                      break
+                    }
+                  }
+                  
+                  if (isPartialMatch) {
+                    allCostMatchingStats.partialMatches++
+                  } else {
+                    allCostMatchingStats.fuzzyMatches++
+                  }
+                }
+              } else {
+                allMissingCosts.push(sku)
+                allCostMatchingStats.noMatches++
+              }
+            } else {
+              allCostMatchingStats.noMatches++
+            }
+            
+            const processedRow: ProcessedOrder = {
+              "Número do produto": sku,
+              "Nome do produto": sku,
+              "Preço do produto": precoProtudo,
+              "Valor do cupom": valorCupom,
+              Comissão: comissao,
+              "Receita estimada de mercadorias": receitaEstimada,
+              Peças: pecas,
+              Frete: frete,
+              "A receber final": aReceberFinal,
+              Custo: custo,
+              "Margem de contribuição": margemContribuicao,
+              "Lucro Bruto": lucroBruto,
+            }
+            
+            allProcessedData.push(processedRow)
+          } catch (error) {
+            console.error(`Error processing row ${i + 1} in ${fileName}:`, error)
+            continue
+          }
+        }
+        
+        console.log(`Successfully processed ${fileName}`)
+        
+      } catch (error) {
+        console.error(`Error processing file ${fileName}:`, error)
+        continue
+      }
+    }
+    
+    console.log(`ZIP processing complete. Total rows: ${allProcessedData.length}`)
+    
+    return {
+      data: allProcessedData,
+      missingCosts: [...Array.from(new Set(allMissingCosts))], // Remove duplicates
+      costMatchingStats: allCostMatchingStats,
+    }
+    
+  } catch (error) {
+    console.error("Error in processZipFiles:", error)
+    return { error: "Erro inesperado durante o processamento do arquivo ZIP" }
   }
 }
