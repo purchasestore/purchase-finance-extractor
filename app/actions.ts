@@ -7,6 +7,14 @@ import { parseBrazilianCurrency } from "@/lib/currency-utils"
 interface CostData {
   SKU: string
   "Custo Unitário": number | string
+  "Número do produto"?: string
+  Codigo?: string
+  Code?: string
+  sku?: string
+  Custo?: number | string
+  Cost?: number | string
+  Valor?: number | string
+  Price?: number | string
 }
 
 // Fixed cost data as fallback
@@ -77,7 +85,7 @@ function findBestCostMatch(orderSKU: string, costMap: Map<string, number>): numb
   }
 
   // 3. Partial match - find SKUs that contain the order SKU or vice versa
-  for (const [costSKU, cost] of costMap.entries()) {
+  for (const [costSKU, cost] of Array.from(costMap.entries())) {
     const normalizedCostSKU = normalizeSKU(costSKU)
 
     // Check if order SKU contains cost SKU (for cases like "VEST-LONG-TOP-SAI-FEND-123" matching "VEST-LONG-TOP-SAI-FEND-")
@@ -94,7 +102,7 @@ function findBestCostMatch(orderSKU: string, costMap: Map<string, number>): numb
   // 4. Fuzzy match - find the most similar SKU
   let bestMatch: { sku: string; cost: number; similarity: number } | null = null
 
-  for (const [costSKU, cost] of costMap.entries()) {
+  for (const [costSKU, cost] of Array.from(costMap.entries())) {
     const similarity = calculateSimilarity(normalizedOrderSKU, normalizeSKU(costSKU))
     if (similarity > 0.7 && (!bestMatch || similarity > bestMatch.similarity)) {
       bestMatch = { sku: costSKU, cost, similarity }
@@ -190,14 +198,14 @@ export async function processOrderData(
     // Debug: log first row to see what we're getting
     console.log("First row sample:", orderData[0])
 
-    // Validate required columns
+    // Validate required columns - Updated for new SHEIN format
     const requiredColumns = [
-      "Número do produto",
-      "Preço do produto",
+      "Número do documento (Pedido#/Ticket#/Invoice#/Guia...etc)",
+      "Preço total de produto",
       "Valor do cupom",
       "Comissão",
-      "Receita estimada de mercadorias",
-      "Nome do produto",
+      "Valor a receber",
+      "Quantidade de produto",
     ]
 
     const firstRow = orderData[0]
@@ -210,6 +218,18 @@ export async function processOrderData(
       return {
         error: `Colunas obrigatórias não encontradas: ${missingColumns.join(", ")}. Colunas disponíveis: ${availableColumns.join(", ")}`,
       }
+    }
+
+    // Column mapping for new SHEIN format
+    const columnMapping = {
+      sku: "Número do documento (Pedido#/Ticket#/Invoice#/Guia...etc)",
+      preco: "Preço total de produto",
+      cupom: "Valor do cupom",
+      comissao: "Comissão",
+      receita: "Valor a receber",
+      quantidade: "Quantidade de produto",
+      tipoReceita: "Tipo de receita e despesa",
+      tipoFatura: "Tipo de fatura"
     }
 
     // Build cost map
@@ -286,7 +306,7 @@ export async function processOrderData(
     console.log(`Using cost data: ${costDataSource}`)
     console.log(`Total cost entries: ${costMap.size / 2}`)
 
-    // Process order data
+    // Process order data - Updated for new SHEIN format
     const processedData: ProcessedOrder[] = []
     const missingCosts: string[] = []
 
@@ -303,30 +323,43 @@ export async function processOrderData(
       const row = orderData[i]
 
       try {
-        const sku = String(row["Número do produto"] || "").trim()
+        // Only process revenue rows, skip expense rows
+        const tipoReceita = String(row[columnMapping.tipoReceita] || "").trim()
+        const tipoFatura = String(row[columnMapping.tipoFatura] || "").trim()
+        
+        // Skip if it's not a revenue row (skip freight, commission, etc.)
+        if (tipoReceita !== "Receita" || !tipoFatura.includes("pedido")) {
+          continue
+        }
+
+        const sku = String(row[columnMapping.sku] || "").trim()
         costMatchingStats.totalSKUs++
 
         // Debug: log parsing for first few rows
         if (i < 3) {
           console.log(`Row ${i + 1} parsing:`, {
             sku,
-            precoOriginal: row["Preço do produto"],
-            precoParsed: parseBrazilianCurrency(row["Preço do produto"]),
-            comissaoOriginal: row["Comissão"],
-            comissaoParsed: parseBrazilianCurrency(row["Comissão"]),
-            receitaOriginal: row["Receita estimada de mercadorias"],
-            receitaParsed: parseBrazilianCurrency(row["Receita estimada de mercadorias"]),
+            precoOriginal: row[columnMapping.preco],
+            precoParsed: parseBrazilianCurrency(row[columnMapping.preco]),
+            comissaoOriginal: row[columnMapping.comissao],
+            comissaoParsed: parseBrazilianCurrency(row[columnMapping.comissao]),
+            receitaOriginal: row[columnMapping.receita],
+            receitaParsed: parseBrazilianCurrency(row[columnMapping.receita]),
+            quantidade: row[columnMapping.quantidade],
+            tipoReceita,
+            tipoFatura
           })
         }
 
         // Parse Brazilian currency format for all monetary fields
-        const precoProtudo = parseBrazilianCurrency(row["Preço do produto"])
-        const valorCupom = parseBrazilianCurrency(row["Valor do cupom"])
-        const comissao = parseBrazilianCurrency(row["Comissão"])
-        const receitaEstimada = parseBrazilianCurrency(row["Receita estimada de mercadorias"])
+        const precoProtudo = parseBrazilianCurrency(row[columnMapping.preco])
+        const valorCupom = parseBrazilianCurrency(row[columnMapping.cupom])
+        const comissao = parseBrazilianCurrency(row[columnMapping.comissao])
+        const receitaEstimada = parseBrazilianCurrency(row[columnMapping.receita])
+        const quantidade = Number(row[columnMapping.quantidade]) || 1
 
         // Apply business rules
-        const pecas = 1
+        const pecas = quantidade
         const frete = 4
         const aReceberFinal = receitaEstimada - comissao
 
@@ -365,7 +398,7 @@ export async function processOrderData(
               const normalizedSKU = normalizeSKU(sku)
               let isPartialMatch = false
 
-              for (const costSKU of costMap.keys()) {
+              for (const costSKU of Array.from(costMap.keys())) {
                 if (normalizedSKU.includes(normalizeSKU(costSKU)) || normalizeSKU(costSKU).includes(normalizedSKU)) {
                   isPartialMatch = true
                   break
@@ -401,7 +434,7 @@ export async function processOrderData(
 
         const processedRow: ProcessedOrder = {
           "Número do produto": sku,
-          "Nome do produto": String(row["Nome do produto"] || ""),
+          "Nome do produto": sku, // Use SKU as product name since it's not in the new format
           "Preço do produto": precoProtudo,
           "Valor do cupom": valorCupom,
           Comissão: comissao,
@@ -426,7 +459,7 @@ export async function processOrderData(
 
     return {
       data: processedData,
-      missingCosts: [...new Set(missingCosts)], // Remove duplicates
+      missingCosts: [...Array.from(new Set(missingCosts))], // Remove duplicates
       costMatchingStats,
     }
   } catch (error) {

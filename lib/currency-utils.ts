@@ -18,12 +18,19 @@ export function parseBrazilianCurrency(value: any): number {
   // Convert to string and clean
   let cleanValue = String(value)
     .replace(/R\$\s*/g, "") // Remove R$ and spaces
+    .replace(/BRL\s*/g, "") // Remove BRL and spaces (new format)
     .replace(/\s+/g, "") // Remove all spaces
     .trim()
 
   // Handle empty or invalid values
-  if (!cleanValue || cleanValue === "-" || cleanValue === "" || cleanValue === "0") {
+  if (!cleanValue || cleanValue === "-" || cleanValue === "" || cleanValue === "0" || cleanValue === "/") {
     return 0
+  }
+
+  // Handle negative values
+  const isNegative = cleanValue.startsWith('-');
+  if (isNegative) {
+    cleanValue = cleanValue.substring(1);
   }
 
   // Brazilian format handling
@@ -51,7 +58,8 @@ export function parseBrazilianCurrency(value: any): number {
   }
 
   const parsed = Number.parseFloat(cleanValue)
-  return isNaN(parsed) ? 0 : parsed
+  const result = isNaN(parsed) ? 0 : parsed
+  return isNegative ? -result : result
 }
 
 /**
