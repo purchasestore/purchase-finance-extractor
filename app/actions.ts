@@ -199,14 +199,13 @@ export async function processOrderData(
     // Debug: log first row to see what we're getting
     console.log("First row sample:", orderData[0])
 
-    // Validate required columns - Updated for new SHEIN format
+    // Validate required columns - order-details format (new.xlsx)
     const requiredColumns = [
-      "Número do documento (Pedido#/Ticket#/Invoice#/Guia...etc)",
-      "Preço total de produto",
+      "Número do produto",
+      "Preço do produto",
       "Valor do cupom",
       "Comissão",
-      "Valor a receber",
-      "Quantidade de produto",
+      "Receita estimada de mercadorias",
     ]
 
     const firstRow = orderData[0]
@@ -221,16 +220,15 @@ export async function processOrderData(
       }
     }
 
-    // Column mapping for new SHEIN format
+    // Column mapping for order-details format
     const columnMapping = {
-      sku: "Número do documento (Pedido#/Ticket#/Invoice#/Guia...etc)",
-      preco: "Preço total de produto",
+      sku: "Número do produto",
+      nome: "Nome do produto",
+      preco: "Preço do produto",
       cupom: "Valor do cupom",
       comissao: "Comissão",
-      receita: "Valor a receber",
-      quantidade: "Quantidade de produto",
-      tipoReceita: "Tipo de receita e despesa",
-      tipoFatura: "Tipo de fatura"
+      receita: "Receita estimada de mercadorias",
+      quantidade: "Quantidade de produto", // may not exist in this layout
     }
 
     // Build cost map
@@ -307,7 +305,7 @@ export async function processOrderData(
     console.log(`Using cost data: ${costDataSource}`)
     console.log(`Total cost entries: ${costMap.size / 2}`)
 
-    // Process order data - Updated for new SHEIN format
+    // Process order data - order-details format
     const processedData: ProcessedOrder[] = []
     const missingCosts: string[] = []
 
@@ -324,15 +322,6 @@ export async function processOrderData(
       const row = orderData[i]
 
       try {
-        // Only process revenue rows, skip expense rows
-        const tipoReceita = String(row[columnMapping.tipoReceita] || "").trim()
-        const tipoFatura = String(row[columnMapping.tipoFatura] || "").trim()
-        
-        // Skip if it's not a revenue row (skip freight, commission, etc.)
-        if (tipoReceita !== "Receita" || !tipoFatura.includes("pedido")) {
-          continue
-        }
-
         const sku = String(row[columnMapping.sku] || "").trim()
         costMatchingStats.totalSKUs++
 
@@ -347,8 +336,6 @@ export async function processOrderData(
             receitaOriginal: row[columnMapping.receita],
             receitaParsed: parseBrazilianCurrency(row[columnMapping.receita]),
             quantidade: row[columnMapping.quantidade],
-            tipoReceita,
-            tipoFatura
           })
         }
 
@@ -435,7 +422,7 @@ export async function processOrderData(
 
         const processedRow: ProcessedOrder = {
           "Número do produto": sku,
-          "Nome do produto": sku, // Use SKU as product name since it's not in the new format
+          "Nome do produto": String(row[columnMapping.nome] || sku),
           "Preço do produto": precoProtudo,
           "Valor do cupom": valorCupom,
           Comissão: comissao,
@@ -523,16 +510,15 @@ export async function processZipFiles(
       }
     })
     
-    // Column mapping for new SHEIN format
+    // Column mapping for order-details format (ZIP processing)
     const columnMapping = {
-      sku: "Número do documento (Pedido#/Ticket#/Invoice#/Guia...etc)",
-      preco: "Preço total de produto",
+      sku: "Número do produto",
+      nome: "Nome do produto",
+      preco: "Preço do produto",
       cupom: "Valor do cupom",
       comissao: "Comissão",
-      receita: "Valor a receber",
-      quantidade: "Quantidade de produto",
-      tipoReceita: "Tipo de receita e despesa",
-      tipoFatura: "Tipo de fatura"
+      receita: "Receita estimada de mercadorias",
+      quantidade: "Quantidade de produto", // may not exist in this layout
     }
     
     // Process all Excel files
@@ -588,16 +574,13 @@ export async function processZipFiles(
           continue
         }
         
-        // Validate required columns
+        // Validate required columns (order-details layout)
         const requiredColumns = [
-          "Número do documento (Pedido#/Ticket#/Invoice#/Guia...etc)",
-          "Preço total de produto",
+          "Número do produto",
+          "Preço do produto",
           "Valor do cupom",
           "Comissão",
-          "Valor a receber",
-          "Quantidade de produto",
-          "Tipo de receita e despesa",
-          "Tipo de fatura"
+          "Receita estimada de mercadorias",
         ]
         
         const firstRow = data[0]
@@ -614,14 +597,6 @@ export async function processZipFiles(
           const row = data[i]
           
           try {
-            // Only process revenue rows
-            const tipoReceita = String(row[columnMapping.tipoReceita] || "").trim()
-            const tipoFatura = String(row[columnMapping.tipoFatura] || "").trim()
-            
-            if (tipoReceita !== "Receita" || !tipoFatura.includes("pedido")) {
-              continue
-            }
-            
             const sku = String(row[columnMapping.sku] || "").trim()
             allCostMatchingStats.totalSKUs++
             
@@ -683,7 +658,7 @@ export async function processZipFiles(
             
             const processedRow: ProcessedOrder = {
               "Número do produto": sku,
-              "Nome do produto": sku,
+              "Nome do produto": String(row[columnMapping.nome] || sku),
               "Preço do produto": precoProtudo,
               "Valor do cupom": valorCupom,
               Comissão: comissao,
